@@ -116,7 +116,7 @@ class SearchPreviews(commands.Cog):
                 sp_text += f"`{i}.` **{result['title'][:50]}** - {result['artist'][:30]}\n"
             embed.add_field(name="🎵 Spotify", value=sp_text, inline=False)
         
-        embed.set_footer(text="Usa /play <canción> para reproducir")
+        embed.set_footer(text="Usa /play <canción> para reproducir • Hecho por flexyng | BSD-3-Clause License")
         await ctx.send(embed=embed)
 
 async def setup(bot):

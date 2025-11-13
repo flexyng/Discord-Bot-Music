@@ -180,7 +180,7 @@ def create_help_embed() -> discord.Embed:
     embed = discord.Embed(
         title="🎵 Ayuda - Comandos disponibles",
         color=COLORS["primary"],
-        description="Lista completa de comandos del bot de música"
+        description="Lista completa de comandos del bot de música v1.3.0"
     )
     
     embed.add_field(
@@ -192,6 +192,10 @@ def create_help_embed() -> discord.Embed:
 `/skip` - Salta la canción actual
 `/stop` - Detiene la música
 `/queue` - Muestra la cola
+`/shuffle` - Activa/desactiva shuffle
+`/loop` - Cambia modo de repetición
+`/volume <0-100>` - Ajusta volumen
+`/nowplaying` - Canción actual
 """,
         inline=False
     )
@@ -210,7 +214,6 @@ def create_help_embed() -> discord.Embed:
         name="📋 Playlists",
         value="""
 `/playlist create <nombre>` - Crea playlist
-`/playlist add <nombre> <canción>` - Agrega canción
 `/playlist list` - Lista tus playlists
 `/playlist delete <nombre>` - Elimina playlist
 """,
@@ -218,10 +221,113 @@ def create_help_embed() -> discord.Embed:
     )
     
     embed.add_field(
-        name="📊 Perfil",
+        name="🎛 Gestor de Cola",
         value="""
-`/stats` - Muestra tus estadísticas
-`/settings` - Configura preferencias
+`/queuemgr insert <pos> <canción>` - Inserta en posición
+`/queuemgr move <from> <to>` - Mueve canción
+`/queuemgr remove <posición>` - Elimina de posición
+`/queuemgr clear` - Limpia la cola
+`/queuemgr duplicate <pos>` - Duplica canción
+`/queuemgr random <cantidad>` - Agrega aleatorias
+`/queueinfo` - Info de la cola
+""",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🏆 Leaderboards",
+        value="""
+`/leaderboard plays` - Top reproducciones
+`/leaderboard time` - Top horas
+`/leaderboard songs` - Canciones populares
+`/leaderboard artists` - Artistas populares
+`/leaderboard genres` - Géneros populares
+`/myrank` - Tu ranking personal
+""",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="📊 Analítica de Playlists",
+        value="""
+`/playlistinfo analyze <playlist>` - Analiza playlist
+`/playlistinfo diversity <playlist>` - Diversidad
+`/playlistinfo genres <playlist>` - Desglose géneros
+`/playlistinfo popularity <playlist>` - Popularidad
+`/playlistinfo timeline <playlist>` - Línea temporal
+`/plstats` - Tus estadísticas
+`/plcompare <pl1> <pl2>` - Compara playlists
+""",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🔧 Herramientas",
+        value="""
+`/tools ping` - Latencia del bot
+`/tools uptime` - Tiempo de actividad
+`/tools stats` - Estadísticas bot
+`/tools invite` - Link de invitación
+`/avatar [@user]` - Ver avatar
+`/userinfo [@user]` - Info de usuario
+`/serverinfo` - Info del servidor
+`/report <descripción>` - Reportar bug
+`/suggest <descripción>` - Sugerir feature
+""",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🎪 Características Avanzadas",
+        value="""
+`/djmode enable [rol]` - Modo DJ
+`/musicbattle start [@usuario]` - Batalla musical
+`/trivia` - Trivia musical
+`/songanalysis <canción>` - Análisis de canción
+`/moodradio [happy|sad|energetic|chill]` - Radio por mood
+`/musicstats [@user]` - Estadísticas musicales
+""",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🤝 Colaboración",
+        value="""
+`/collab start <nombre>` - Sesión colaborativa
+`/collab join <id>` - Unirse a sesión
+`/collab add <id> <canción>` - Agregar canción
+`/request add <canción>` - Solicitar canción
+`/request list` - Ver solicitudes
+`/suggest artist <artista>` - Sugerir artista
+`/suggest genre <género>` - Sugerir género
+""",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🔍 Búsqueda y Recomendaciones",
+        value="""
+`/search [youtube|spotify|all] <query>` - Buscar canciones
+`/recommend [limite]` - Recomendaciones
+`/similar` - Canciones similares
+`/topgenres` - Géneros favoritos
+`/radio list` - Ver estaciones
+`/radio play <estación>` - Reproducer estación
+""",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🌐 Idioma y Configuración",
+        value="""
+`/language [código]` - Cambiar idioma
+`/mylanguage` - Tu idioma actual
+`/languages` - Ver idiomas disponibles
+`/settings theme [dark|light]` - Cambiar tema
+`/notifications settings` - Configurar notificaciones
+`/profile` - Ver tu perfil
+`/milestones` - Ver tus hitos
+`/streak` - Tu racha de escucha
 """,
         inline=False
     )
