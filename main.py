@@ -33,9 +33,13 @@ async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.listening,
-            name="🎵 /play | /help"
+            name="🎵 /play | /language"
         )
     )
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    logger.error(f"Error en evento {event}", exc_info=True)
 
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -87,6 +91,9 @@ async def main():
     except Exception as e:
         logger.error(f"Error fatal: {e}", exc_info=True)
         sys.exit(1)
+    finally:
+        from db import close_db
+        await close_db()
 
 if __name__ == "__main__":
     try:

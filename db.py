@@ -1,199 +1,238 @@
-import aiosqlite
-import os
+import motor.motor_asyncio
 from datetime import datetime
+from pymongo import ASCENDING, DESCENDING
+from config import MONGODB_URI, MONGODB_DB_NAME
+from logger import logger
 
-DB_PATH = "music_bot.db"
+client = None
+db = None
 
 async def init_db():
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS playlists (
-                id INTEGER PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT,
-                is_public BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, name)
-            )
-        """)
+    global client, db
+    try:
+        client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URI)
+        db = client[MONGODB_DB_NAME]
         
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS playlist_songs (
-                id INTEGER PRIMARY KEY,
-                playlist_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                artist TEXT,
-                url TEXT NOT NULL,
-                source TEXT NOT NULL,
-                duration INTEGER,
-                thumbnail TEXT,
-                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (playlist_id) REFERENCES playlists(id)
-            )
-        """)
+        await db.command('ping')
+        logger.info("✅ Conectado a MongoDB correctamente")
         
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS favorites (
-                id INTEGER PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                artist TEXT,
-                url TEXT NOT NULL,
-                source TEXT NOT NULL,
-                thumbnail TEXT,
-                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                plays INTEGER DEFAULT 0,
-                UNIQUE(user_id, url)
-            )
-        """)
-        
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS user_stats (
-                user_id INTEGER PRIMARY KEY,
-                total_plays INTEGER DEFAULT 0,
-                total_time_played INTEGER DEFAULT 0,
-                favorite_genre TEXT,
-                favorite_artist TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS play_history (
-                id INTEGER PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                artist TEXT,
-                source TEXT NOT NULL,
-                played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                duration INTEGER
-            )
-        """)
-        
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS user_settings (
-                user_id INTEGER PRIMARY KEY,
-                theme TEXT DEFAULT 'dark',
-                notifications BOOLEAN DEFAULT 1,
-                autoplay BOOLEAN DEFAULT 1,
-                language TEXT DEFAULT 'es'
-            )
-        """)
-        
-        await db.commit()
+        await create_indexes()
+        logger.info("✅ Índices de la base de datos creados")
+    except Exception as e:
+        logger.error(f"❌ Error conectando a MongoDB: {e}")
+        raise
+
+async def create_indexes():
+    await db.playlists.create_index([("user_id", ASCENDING), ("name", ASCENDING)], unique=True)
+    await db.favorites.create_index([("user_id", ASCENDING), ("url", ASCENDING)], unique=True)
+    await db.play_history.create_index([("user_id", ASCENDING), ("played_at", DESCENDING)])
+    await db.user_stats.create_index([("user_id", ASCENDING)], unique=True)
+    await db.user_settings.create_index([("user_id", ASCENDING)], unique=True)
 
 async def create_playlist(user_id: int, name: str, description: str = None):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT INTO playlists (user_id, name, description) VALUES (?, ?, ?)",
-            (user_id, name, description)
-        )
-        await db.commit()
+    try:
+        playlist = {
+            "user_id": user_id,
+            "name": name,
+            "description": description,
+            "is_public": False,
+            "created_at": datetime.utcnow()
+        }
+        result = await db.playlists.insert_one(playlist)
+        return result.inserted_id
+    except Exception as e:
+        logger.error(f"Error creando playlist: {e}")
+        raise
 
 async def add_song_to_playlist(playlist_id: int, title: str, url: str, source: str, artist: str = None, duration: int = None, thumbnail: str = None):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT INTO playlist_songs (playlist_id, title, artist, url, source, duration, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (playlist_id, title, artist, url, source, duration, thumbnail)
-        )
-        await db.commit()
+    try:
+        song = {
+            "playlist_id": playlist_id,
+            "title": title,
+            "artist": artist,
+            "url": url,
+            "source": source,
+            "duration": duration,
+            "thumbnail": thumbnail,
+            "added_at": datetime.utcnow()
+        }
+        result = await db.playlist_songs.insert_one(song)
+        return result.inserted_id
+    except Exception as e:
+        logger.error(f"Error agregando canción a playlist: {e}")
+        raise
 
 async def add_favorite(user_id: int, title: str, url: str, source: str, artist: str = None, thumbnail: str = None):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT OR IGNORE INTO favorites (user_id, title, artist, url, source, thumbnail) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, title, artist, url, source, thumbnail)
+    try:
+        favorite = {
+            "user_id": user_id,
+            "title": title,
+            "artist": artist,
+            "url": url,
+            "source": source,
+            "thumbnail": thumbnail,
+            "added_at": datetime.utcnow(),
+            "plays": 0
+        }
+        await db.favorites.update_one(
+            {"user_id": user_id, "url": url},
+            {"$set": favorite},
+            upsert=True
         )
-        await db.commit()
+    except Exception as e:
+        logger.error(f"Error agregando favorito: {e}")
+        raise
 
 async def get_user_favorites(user_id: int, limit: int = 20):
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT title, artist, url, source, thumbnail, plays FROM favorites WHERE user_id = ? ORDER BY plays DESC LIMIT ?",
-            (user_id, limit)
-        ) as cursor:
-            return await cursor.fetchall()
+    try:
+        favorites = await db.favorites.find(
+            {"user_id": user_id}
+        ).sort("plays", DESCENDING).limit(limit).to_list(length=limit)
+        return favorites
+    except Exception as e:
+        logger.error(f"Error obteniendo favoritos: {e}")
+        return []
 
 async def get_user_playlists(user_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT id, name, description FROM playlists WHERE user_id = ? ORDER BY created_at DESC",
-            (user_id,)
-        ) as cursor:
-            return await cursor.fetchall()
+    try:
+        playlists = await db.playlists.find(
+            {"user_id": user_id}
+        ).sort("created_at", DESCENDING).to_list(length=None)
+        return playlists
+    except Exception as e:
+        logger.error(f"Error obteniendo playlists: {e}")
+        return []
 
 async def get_playlist_songs(playlist_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT id, title, artist, url, source, duration, thumbnail FROM playlist_songs WHERE playlist_id = ?",
-            (playlist_id,)
-        ) as cursor:
-            return await cursor.fetchall()
+    try:
+        songs = await db.playlist_songs.find(
+            {"playlist_id": playlist_id}
+        ).to_list(length=None)
+        return songs
+    except Exception as e:
+        logger.error(f"Error obteniendo canciones de playlist: {e}")
+        return []
 
 async def remove_from_playlist(playlist_id: int, song_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "DELETE FROM playlist_songs WHERE id = ? AND playlist_id = ?",
-            (song_id, playlist_id)
-        )
-        await db.commit()
+    try:
+        await db.playlist_songs.delete_one({"_id": song_id, "playlist_id": playlist_id})
+    except Exception as e:
+        logger.error(f"Error removiendo canción de playlist: {e}")
+        raise
 
 async def delete_playlist(playlist_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM playlist_songs WHERE playlist_id = ?", (playlist_id,))
-        await db.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
-        await db.commit()
+    try:
+        await db.playlist_songs.delete_many({"playlist_id": playlist_id})
+        await db.playlists.delete_one({"_id": playlist_id})
+    except Exception as e:
+        logger.error(f"Error eliminando playlist: {e}")
+        raise
 
 async def add_play_history(user_id: int, title: str, artist: str, source: str, duration: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT INTO play_history (user_id, title, artist, source, duration) VALUES (?, ?, ?, ?, ?)",
-            (user_id, title, artist, source, duration)
+    try:
+        history = {
+            "user_id": user_id,
+            "title": title,
+            "artist": artist,
+            "source": source,
+            "duration": duration,
+            "played_at": datetime.utcnow()
+        }
+        await db.play_history.insert_one(history)
+        
+        await db.user_stats.update_one(
+            {"user_id": user_id},
+            {
+                "$inc": {
+                    "total_plays": 1,
+                    "total_time_played": duration
+                }
+            },
+            upsert=True
         )
-        await db.execute(
-            "UPDATE user_stats SET total_plays = total_plays + 1, total_time_played = total_time_played + ? WHERE user_id = ?",
-            (duration, user_id)
-        )
-        await db.commit()
+    except Exception as e:
+        logger.error(f"Error agregando historial de reproducción: {e}")
+        raise
 
 async def get_user_stats(user_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT total_plays, total_time_played, favorite_genre, favorite_artist FROM user_stats WHERE user_id = ?",
-            (user_id,)
-        ) as cursor:
-            result = await cursor.fetchone()
-            if not result:
-                await db.execute(
-                    "INSERT INTO user_stats (user_id) VALUES (?)",
-                    (user_id,)
-                )
-                await db.commit()
-                return (0, 0, None, None)
-            return result
+    try:
+        stats = await db.user_stats.find_one({"user_id": user_id})
+        if not stats:
+            await db.user_stats.insert_one({
+                "user_id": user_id,
+                "total_plays": 0,
+                "total_time_played": 0,
+                "favorite_genre": None,
+                "favorite_artist": None,
+                "updated_at": datetime.utcnow()
+            })
+            return (0, 0, None, None)
+        return (
+            stats.get("total_plays", 0),
+            stats.get("total_time_played", 0),
+            stats.get("favorite_genre"),
+            stats.get("favorite_artist")
+        )
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas: {e}")
+        return (0, 0, None, None)
 
 async def get_user_settings(user_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT theme, notifications, autoplay, language FROM user_settings WHERE user_id = ?",
-            (user_id,)
-        ) as cursor:
-            result = await cursor.fetchone()
-            if not result:
-                await db.execute(
-                    "INSERT INTO user_settings (user_id) VALUES (?)",
-                    (user_id,)
-                )
-                await db.commit()
-                return ('dark', True, True, 'es')
-            return result
+    try:
+        settings = await db.user_settings.find_one({"user_id": user_id})
+        if not settings:
+            await db.user_settings.insert_one({
+                "user_id": user_id,
+                "theme": "dark",
+                "notifications": True,
+                "autoplay": True,
+                "language": "es"
+            })
+            return ("dark", True, True, "es")
+        return (
+            settings.get("theme", "dark"),
+            settings.get("notifications", True),
+            settings.get("autoplay", True),
+            settings.get("language", "es")
+        )
+    except Exception as e:
+        logger.error(f"Error obteniendo configuración: {e}")
+        return ("dark", True, True, "es")
 
 async def update_user_settings(user_id: int, **settings):
-    async with aiosqlite.connect(DB_PATH) as db:
-        for key, value in settings.items():
-            await db.execute(
-                f"UPDATE user_settings SET {key} = ? WHERE user_id = ?",
-                (value, user_id)
-            )
-        await db.commit()
+    try:
+        await db.user_settings.update_one(
+            {"user_id": user_id},
+            {"$set": settings},
+            upsert=True
+        )
+    except Exception as e:
+        logger.error(f"Error actualizando configuración: {e}")
+        raise
+
+async def get_user_language(user_id: int):
+    try:
+        settings = await db.user_settings.find_one({"user_id": user_id})
+        if settings:
+            return settings.get("language", "es")
+        return "es"
+    except Exception as e:
+        logger.error(f"Error obteniendo idioma: {e}")
+        return "es"
+
+async def set_user_language(user_id: int, language: str):
+    try:
+        await db.user_settings.update_one(
+            {"user_id": user_id},
+            {"$set": {"language": language}},
+            upsert=True
+        )
+    except Exception as e:
+        logger.error(f"Error estableciendo idioma: {e}")
+        raise
+
+async def close_db():
+    global client
+    if client:
+        client.close()
+        logger.info("✅ Conexión a MongoDB cerrada")
