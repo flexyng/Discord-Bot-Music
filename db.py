@@ -10,7 +10,13 @@ db = None
 async def init_db():
     global client, db
     try:
-        client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URI)
+        client = motor.motor_asyncio.AsyncIOMotorClient(
+            MONGODB_URI,
+            maxPoolSize=10,
+            minPoolSize=5,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=10000
+        )
         db = client[MONGODB_DB_NAME]
         
         await db.command('ping')

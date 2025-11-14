@@ -181,7 +181,7 @@ prototipo/
 ### Cambiar el prefijo de comandos
 En `config.py`:
 ```python
-COMMAND_PREFIX = "!"  # Cambiar "/" por otro
+COMMAND_PREFIX = "!"  
 ```
 
 ### Ajustar colores de embeds

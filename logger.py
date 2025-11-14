@@ -2,6 +2,8 @@ import logging
 from datetime import datetime
 import os
 
+PRODUCTION = os.getenv('ENVIRONMENT', 'production') == 'production'
+
 LOG_DIR = "logs"
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
@@ -9,16 +11,17 @@ if not os.path.exists(LOG_DIR):
 LOG_FILE = os.path.join(LOG_DIR, f"music_bot_{datetime.now().strftime('%Y%m%d')}.log")
 
 logger = logging.getLogger("MusicBot")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG if not PRODUCTION else logging.INFO)
+logger.propagate = False
 
-file_handler = logging.FileHandler(LOG_FILE)
-file_handler.setLevel(logging.DEBUG)
+file_handler = logging.FileHandler(LOG_FILE, encoding='utf-8')
+file_handler.setLevel(logging.INFO if not PRODUCTION else logging.WARNING)
 
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.INFO if not PRODUCTION else logging.WARNING)
 
 formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    '%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 

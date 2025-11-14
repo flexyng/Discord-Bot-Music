@@ -10,8 +10,12 @@ import asyncio
 import random
 import db
 from logger import log_command, log_error, log_music_event
+from functools import lru_cache
 
 class MusicPlayer:
+    MAX_QUEUE_SIZE = 500
+    MAX_HISTORY_PER_GUILD = 1000
+    
     def __init__(self):
         self.queues = defaultdict(deque)
         self.now_playing = {}
@@ -21,6 +25,9 @@ class MusicPlayer:
         self.loop_status = defaultdict(lambda: "off")
         self.shuffle_enabled = defaultdict(bool)
         self.volume = defaultdict(lambda: 50)
+        self._search_cache = {}
+        self._cache_max_size = 256
+        self._guild_cleanup_counter = 0
         
         self.ydl_opts = {
             'format': 'bestaudio/best',
@@ -28,7 +35,8 @@ class MusicPlayer:
             'quiet': True,
             'no_warnings': True,
             'default_search': 'ytsearch',
-            'socket_timeout': 30,
+            'socket_timeout': 10,
+            'extractor_args': {'youtube': {'player_client': ['web']}}
         }
         
         if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
@@ -40,13 +48,30 @@ class MusicPlayer:
         else:
             self.sp = None
 
+    def _get_cache_key(self, query: str, source: str):
+        return f"{source}:{query.lower()}"
+    
+    def _add_to_cache(self, key: str, value):
+        if len(self._search_cache) >= self._cache_max_size:
+            oldest_key = next(iter(self._search_cache))
+            del self._search_cache[oldest_key]
+        self._search_cache[key] = value
+    
+    def _get_from_cache(self, key: str):
+        return self._search_cache.get(key)
+    
     async def search_youtube(self, query: str):
+        cache_key = self._get_cache_key(query, 'youtube')
+        cached_result = self._get_from_cache(cache_key)
+        if cached_result:
+            return cached_result
+        
         try:
             loop = asyncio.get_event_loop()
             with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
                 info = await loop.run_in_executor(None, lambda: ydl.extract_info(query, download=False))
                 if info:
-                    return {
+                    result = {
                         'title': info.get('title', 'Unknown'),
                         'url': info.get('webpage_url', ''),
                         'duration': info.get('duration', 0),
@@ -54,11 +79,18 @@ class MusicPlayer:
                         'artist': info.get('uploader', 'Unknown'),
                         'source': 'youtube'
                     }
+                    self._add_to_cache(cache_key, result)
+                    return result
         except Exception as e:
             log_error(str(e), "search_youtube")
         return None
 
     async def search_spotify(self, query: str):
+        cache_key = self._get_cache_key(query, 'spotify')
+        cached_result = self._get_from_cache(cache_key)
+        if cached_result:
+            return cached_result
+        
         if not self.sp:
             return None
         
@@ -76,7 +108,7 @@ class MusicPlayer:
                 ydl_query = f"{track['name']} {artists}"
                 youtube_result = await self.search_youtube(ydl_query)
                 
-                return {
+                result = {
                     'title': track['name'],
                     'artist': artists,
                     'duration': track['duration_ms'] // 1000,
@@ -84,6 +116,8 @@ class MusicPlayer:
                     'url': youtube_result['url'] if youtube_result else None,
                     'source': 'spotify'
                 }
+                self._add_to_cache(cache_key, result)
+                return result
         except Exception as e:
             log_error(str(e), "search_spotify")
         return None
@@ -100,7 +134,23 @@ class MusicPlayer:
             return result
 
     def add_to_queue(self, guild_id: int, song: dict):
-        self.queues[guild_id].append(song)
+        queue = self.queues[guild_id]
+        if len(queue) >= self.MAX_QUEUE_SIZE:
+            queue.popleft()
+        queue.append(song)
+        
+        self._guild_cleanup_counter += 1
+        if self._guild_cleanup_counter % 100 == 0:
+            self._cleanup_inactive_guilds()
+
+    def _cleanup_inactive_guilds(self):
+        if len(self.queues) > 50:
+            for guild_id in list(self.queues.keys()):
+                if guild_id not in self.is_playing or not self.is_playing[guild_id]:
+                    if len(self.queues[guild_id]) == 0:
+                        del self.queues[guild_id]
+                        self.now_playing.pop(guild_id, None)
+                        self.loop_status.pop(guild_id, None)
 
     def get_queue(self, guild_id: int):
         return list(self.queues[guild_id])

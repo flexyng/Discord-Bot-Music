@@ -1,4 +1,5 @@
 from config import DEFAULT_LANGUAGE
+from functools import lru_cache
 
 TRANSLATIONS = {
     "es": {
@@ -588,6 +589,7 @@ TRANSLATIONS = {
     }
 }
 
+@lru_cache(maxsize=512)
 def get_text(key: str, language: str = None) -> str:
     if language is None:
         language = DEFAULT_LANGUAGE
@@ -600,6 +602,7 @@ def get_text(key: str, language: str = None) -> str:
     
     return key
 
+@lru_cache(maxsize=16)
 def get_all_text(language: str = None) -> dict:
     if language is None:
         language = DEFAULT_LANGUAGE
@@ -609,5 +612,6 @@ def get_all_text(language: str = None) -> dict:
     
     return TRANSLATIONS[language]
 
+@lru_cache(maxsize=512)
 def translate(key: str, user_language: str = None) -> str:
     return get_text(key, user_language)

@@ -206,10 +206,49 @@ flake8 .
 mypy .
 ```
 
+## Optimizaciones para Hosting
+
+### Intents de Discord
+- Minimizados intents innecesarios (deshabilitado `members`)
+- Sincronización lazy de comandos
+- Deshabilitados debug events
+
+### Caching
+- **i18n**: LRU cache (512 entradas) para traducciones
+- **Búsquedas**: LRU cache (256 entradas) para YouTube/Spotify
+- Evita búsquedas duplicadas y llamadas API
+
+### Base de Datos
+- Pool de conexiones optimizado (min: 5, max: 10)
+- Timeouts configurados (5s selection, 10s connect)
+- Índices creados automáticamente
+
+### Recursos
+- **Colas**: Límite de 500 canciones por servidor
+- **Caché de búsqueda**: Límite de 256 resultados
+- Limpieza automática de guilds inactivos cada 100 operaciones
+- Garbage collection periódico cada 30 minutos
+
+### Logging
+- Modo producción: Solo WARNING en archivos
+- Verbose reducida en consola
+- Sin propagación a otros loggers
+- Configurar con `ENVIRONMENT=production`
+
+### yt-dlp
+- Socket timeout: 10 segundos
+- Sin advertencias ni logs verbosos
+- Formato optimizado: `bestaudio/best`
+
+### Cargas de Cogs
+- Carga prioritaria: music, search
+- Carga gradual de otros cogs
+- Reduce tiempo de startup
+
 ## Información de Versión
 - **Versión**: v1.4.0
 - **Total Cogs**: 17
 - **Total Comandos**: 80+
 - **Idiomas**: 4 (Español, Inglés, Árabe, Portugués)
 - **Base de datos**: MongoDB
-- **Últimas Adiciones**: Owner commands, Premium system, Hybrid commands
+- **Últimas Adiciones**: Owner commands, Premium system, Hybrid commands, Performance optimizations
