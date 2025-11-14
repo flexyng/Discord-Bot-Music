@@ -108,7 +108,12 @@ class Language(commands.Cog):
                 "es": "Español - Idioma por defecto",
                 "en": "English - Default language for English speakers",
                 "ar": "العربية - اللغة العربية",
-                "pt": "Português - Linguagem padrão para falantes de português"
+                "pt": "Português - Linguagem padrão para falantes de português",
+                "fr": "Français - Langue française",
+                "de": "Deutsch - Deutsche Sprache",
+                "it": "Italiano - Lingua italiana",
+                "ru": "Русский - Русский язык",
+                "ja": "日本語 - 日本語言語"
             }
             
             for code, name in SUPPORTED_LANGUAGES.items():

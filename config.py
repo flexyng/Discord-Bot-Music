@@ -26,7 +26,12 @@ SUPPORTED_LANGUAGES = {
     "es": "Español",
     "en": "English",
     "ar": "العربية",
-    "pt": "Português"
+    "pt": "Português",
+    "fr": "Français",
+    "de": "Deutsch",
+    "it": "Italiano",
+    "ru": "Русский",
+    "ja": "日本語"
 }
 
 PREMIUM_FEATURES = {

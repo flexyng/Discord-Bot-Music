@@ -67,7 +67,7 @@ class Utilities(commands.Cog):
             embed.add_field(name="🎵 Cogs activos", value=len(self.bot.cogs), inline=True)
             embed.add_field(name="⚡ Comandos disponibles", value="80+", inline=True)
             embed.add_field(name="💾 Versión BD", value="MongoDB 7.0", inline=True)
-            embed.add_field(name="🌐 Idiomas", value="4 (ES, EN, AR, PT)", inline=True)
+            embed.add_field(name="🌐 Idiomas", value="9 (ES, EN, AR, PT, FR, DE, IT, RU, JA)", inline=True)
             embed.set_footer(text="Hecho por flexyng | BSD-3-Clause License")
             await ctx.send(embed=embed)
         except Exception as e:
