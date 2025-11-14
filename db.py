@@ -28,6 +28,8 @@ async def create_indexes():
     await db.play_history.create_index([("user_id", ASCENDING), ("played_at", DESCENDING)])
     await db.user_stats.create_index([("user_id", ASCENDING)], unique=True)
     await db.user_settings.create_index([("user_id", ASCENDING)], unique=True)
+    await db.premium_keys.create_index([("key", ASCENDING)], unique=True)
+    await db.premium_users.create_index([("user_id", ASCENDING)], unique=True)
 
 async def create_playlist(user_id: int, name: str, description: str = None):
     try:
@@ -236,3 +238,147 @@ async def close_db():
     if client:
         client.close()
         logger.info("✅ Conexión a MongoDB cerrada")
+
+async def generate_premium_key(duration_days: int = 30):
+    import secrets
+    try:
+        key = f"KEY-{secrets.token_hex(8).upper()}"
+        premium_key = {
+            "key": key,
+            "duration_days": duration_days,
+            "created_at": datetime.utcnow(),
+            "expires_at": None,
+            "redeemed_by": None,
+            "is_active": True,
+            "uses": 0
+        }
+        result = await db.premium_keys.insert_one(premium_key)
+        return key
+    except Exception as e:
+        logger.error(f"Error generando premium key: {e}")
+        raise
+
+async def redeem_premium_key(user_id: int, key: str):
+    try:
+        premium_key = await db.premium_keys.find_one({"key": key})
+        
+        if not premium_key:
+            return False, "Clave no válida"
+        
+        if not premium_key.get("is_active"):
+            return False, "Clave no activa"
+        
+        if premium_key.get("redeemed_by"):
+            return False, "Clave ya ha sido utilizada"
+        
+        expires_at = datetime.utcnow()
+        from datetime import timedelta
+        expires_at += timedelta(days=premium_key["duration_days"])
+        
+        await db.premium_keys.update_one(
+            {"key": key},
+            {
+                "$set": {
+                    "redeemed_by": user_id,
+                    "expires_at": expires_at,
+                    "uses": premium_key.get("uses", 0) + 1
+                }
+            }
+        )
+        
+        await db.premium_users.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "user_id": user_id,
+                    "is_premium": True,
+                    "premium_expires_at": expires_at,
+                    "activated_keys": premium_key.get("uses", 0) + 1
+                }
+            },
+            upsert=True
+        )
+        
+        return True, f"✅ Premium activado hasta {expires_at.strftime('%d/%m/%Y')}"
+    except Exception as e:
+        logger.error(f"Error redenimiendo key: {e}")
+        return False, str(e)
+
+async def is_premium(user_id: int):
+    try:
+        user = await db.premium_users.find_one({"user_id": user_id})
+        if not user:
+            return False
+        
+        expires_at = user.get("premium_expires_at")
+        if not expires_at:
+            return False
+        
+        if datetime.utcnow() > expires_at:
+            await db.premium_users.update_one(
+                {"user_id": user_id},
+                {"$set": {"is_premium": False}}
+            )
+            return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error verificando premium: {e}")
+        return False
+
+async def get_premium_info(user_id: int):
+    try:
+        user = await db.premium_users.find_one({"user_id": user_id})
+        if not user:
+            return None
+        return user
+    except Exception as e:
+        logger.error(f"Error obteniendo info premium: {e}")
+        return None
+
+async def get_premium_keys_info():
+    try:
+        keys = await db.premium_keys.find({}).to_list(length=None)
+        return keys
+    except Exception as e:
+        logger.error(f"Error obteniendo keys: {e}")
+        return []
+
+async def deactivate_premium_key(key: str):
+    try:
+        await db.premium_keys.update_one(
+            {"key": key},
+            {"$set": {"is_active": False}}
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Error desactivando key: {e}")
+        return False
+
+async def extend_premium(user_id: int, duration_days: int):
+    try:
+        from datetime import timedelta
+        user = await db.premium_users.find_one({"user_id": user_id})
+        
+        if not user:
+            expires_at = datetime.utcnow() + timedelta(days=duration_days)
+        else:
+            current_expires = user.get("premium_expires_at", datetime.utcnow())
+            expires_at = current_expires + timedelta(days=duration_days)
+        
+        await db.premium_users.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "user_id": user_id,
+                    "is_premium": True,
+                    "premium_expires_at": expires_at
+                }
+            },
+            upsert=True
+        )
+        
+        return True, expires_at
+    except Exception as e:
+        logger.error(f"Error extendiendo premium: {e}")
+        return False, None

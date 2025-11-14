@@ -334,3 +334,49 @@ def create_help_embed() -> discord.Embed:
     
     embed.set_footer(text="Hecho por flexyng | BSD-3-Clause License")
     return embed
+
+from functools import wraps
+from discord.ext import commands
+from config import OWNER_IDS, COLORS
+import db
+from discord.ext.commands import check
+
+def owner_only():
+    async def predicate(ctx):
+        if ctx.author.id not in OWNER_IDS:
+            embed = create_error_embed(
+                "❌ Permiso denegado",
+                "Solo los propietarios del bot pueden usar este comando."
+            )
+            await ctx.send(embed=embed)
+            return False
+        return True
+    return check(predicate)
+
+def premium_only():
+    async def predicate(ctx):
+        is_premium = await db.is_premium(ctx.author.id)
+        if not is_premium:
+            embed = discord.Embed(
+                title="💎 Característica Premium",
+                description="Este comando solo está disponible para usuarios premium.",
+                color=COLORS["premium"]
+            )
+            embed.add_field(name="¿Cómo obtener Premium?", value="`/premium redeem <key>`", inline=False)
+            embed.set_footer(text="Hecho por flexyng | BSD-3-Clause License")
+            await ctx.send(embed=embed)
+            return False
+        return True
+    return check(predicate)
+
+def admin_only():
+    async def predicate(ctx):
+        if not ctx.author.guild_permissions.administrator:
+            embed = create_error_embed(
+                "❌ Permiso denegado",
+                "Solo administradores pueden usar este comando."
+            )
+            await ctx.send(embed=embed)
+            return False
+        return True
+    return check(predicate)
