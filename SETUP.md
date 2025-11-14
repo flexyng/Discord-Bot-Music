@@ -13,7 +13,7 @@ Bot de música avanzado para Discord con soporte YouTube, Spotify y muchas funci
 
 ### 1. Clonar/Descargar el proyecto
 ```bash
-cd tu_carpeta_proyecto
+cd Discord-Bot-Music
 ```
 
 ### 2. Crear entorno virtual (recomendado)
